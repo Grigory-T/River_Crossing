@@ -1,86 +1,72 @@
-# python 3.8.8
-# jupyter notebook
-# https://en.wikipedia.org/wiki/River_crossing_puzzle
+"""Brute-force solution for a simple river crossing puzzle."""
 
+from collections import deque
 from itertools import combinations
 from random import sample
-from collections import deque
-from time import time
+from typing import Iterable, List, Set, Tuple
 
 
-def river_crossing(animals_number, boat_seats_number, hate_number):
-    # person start at side 1
-    # all animals are on side 1 also
-    # person side might contain hates animals (person controls this side)
-    # person itself does not occupy seat at boat
-    # person can move to other side of river (the only option)
-    # choice - how many and which anumals bring to the other side (0 anumals is possible choice)    
-    
-    side_1 = set(range(animals_number))
-    side_2 = set()
-    hate_pairs = sample(list(combinations(side_1, 2)), k=hate_number)
-    path = f'>>> start                            {side_1 = }, {side_2 = }\n\n'
-    
-    stack = deque()  # BFS in order to find shortest path
-    stack.append((side_1, side_2, path, 1))  
-    # store state of both sides, all previouse moves to this point and side-destination
-    
-    tracer = list()
-    tracer.append(tuple([frozenset(side_1),frozenset(side_2),1]))
-    # store all state which already have been explored by person. Do not repeat state
+State = Tuple[frozenset[int], frozenset[int], int]
 
-    while stack:
-        side_1, side_2, path, side = stack.pop()
-        
-        if not side_1:  # all animals on side 2
+
+def _generate_hate_pairs(animals: Iterable[int], hate_number: int) -> List[Tuple[int, int]]:
+    """Return a random list of pairs of animals that cannot be left alone."""
+
+    all_pairs = list(combinations(animals, 2))
+    return sample(all_pairs, k=hate_number)
+
+
+def _has_conflict(side: Set[int], hate_pairs: Iterable[Tuple[int, int]]) -> bool:
+    """Return ``True`` if the side contains a forbidden pair."""
+
+    return any(i in side and j in side for i, j in hate_pairs)
+
+
+def river_crossing(animals_number: int, boat_seats_number: int, hate_number: int):
+    """Solve the puzzle and return the path and the hate pairs used."""
+
+    side_1: Set[int] = set(range(animals_number))
+    side_2: Set[int] = set()
+
+    hate_pairs = _generate_hate_pairs(side_1, hate_number)
+
+    queue: deque[Tuple[Set[int], Set[int], str, int]] = deque()
+    queue.append((side_1, side_2, f">>> start                            {side_1 = }, {side_2 = }\n\n", 1))
+    visited: Set[State] = {(frozenset(side_1), frozenset(side_2), 1)}
+
+    while queue:
+        side_1, side_2, path, side = queue.popleft()
+
+        if not side_1:
             return path, hate_pairs
-        
-        if side == 1:  # we are on side 1 and we are going to move to side 2
-            for cnt in range(0, boat_seats_number + 1):  # we can move no more animals then number of seats
-                for tup in combinations(side_1, min(cnt, len(side_1))):  # we can pick anumals differently
-                    side_1_ = side_1.copy()
-                    side_2_ = side_2.copy()
 
-                    side_1_ -= set(tup)  # change anumal sets
-                    side_2_ |= set(tup)  # change anumal sets
-                    
-                    flag = True
-                    for i, j in hate_pairs:
-                        if i in side_1_ and j in side_1_:  # check should be after person has moved to side 2
-                            flag = False                   # so hate pairs of animals do not allowed in side 1
+        if side == 1:
+            current, other, next_side = side_1, side_2, 2
+        else:
+            current, other, next_side = side_2, side_1, 1
 
-                    if tuple([frozenset(side_1_), frozenset(side_2_), 2]) in tracer:  # Do not repeat state
-                        flag = False
+        for cnt in range(boat_seats_number + 1):
+            for tup in combinations(current, min(cnt, len(current))):
+                current_new = current - set(tup)
+                other_new = other | set(tup)
 
-                    if flag:
-                        # grow path by one move
-                        # update state history
-                        # add one element on stack
-                        path_ = path + f'move to side 2 {tup!s: >20}       {side_1_ = !s: <30}, {side_2_ = !s: <25}\n'
-                        tracer.append(tuple([frozenset(side_1_), frozenset(side_2_), 2]))
-                        stack.appendleft((side_1_, side_2_, path_, 2))
-        
-        if side == 2:  # similar to side 1
-            for cnt in range(0, boat_seats_number + 1):
-                for tup in combinations(side_2, min(cnt, len(side_2))):
-                    side_1_ = side_1.copy()
-                    side_2_ = side_2.copy()
+                side_1_new, side_2_new = (
+                    (current_new, other_new) if side == 1 else (other_new, current_new)
+                )
 
-                    side_2_ -= set(tup)
-                    side_1_ |= set(tup)
+                if _has_conflict(current_new, hate_pairs):
+                    continue
 
-                    flag = True
-                    for i, j in hate_pairs:
-                        if i in side_2_ and j in side_2_:
-                            flag = False
+                state = (frozenset(side_1_new), frozenset(side_2_new), next_side)
+                if state in visited:
+                    continue
 
-                    if tuple([frozenset(side_1_), frozenset(side_2_), 1]) in tracer:
-                        flag = False
-
-                    if flag:
-                        path_ = path + f'move to side 1 {tup!s: >20}       {side_1_ = !s: <30}, {side_2_ = !s: <25}\n'
-                        tracer.append(tuple([frozenset(side_1_), frozenset(side_2_), 1]))
-                        stack.appendleft((side_1_, side_2_, path_, 1))
+                visited.add(state)
+                path_new = (
+                    path
+                    + f"move to side {next_side} {tup!s: >20}       {side_1_new = !s: <30}, {side_2_new = !s: <25}\n"
+                )
+                queue.append((side_1_new, side_2_new, path_new, next_side))
 
                         
 if __name__ == '__main__':
