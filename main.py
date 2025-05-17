@@ -68,11 +68,17 @@ def river_crossing(animals_number: int, boat_seats_number: int, hate_number: int
                 )
                 queue.append((side_1_new, side_2_new, path_new, next_side))
 
+    # No solution was found
+    return None, hate_pairs
+
                         
 if __name__ == '__main__':
     animals_number = 10
     boat_seats_number = 3  # person himself does not count
     hate_number = 4  # hate pairs generates automatically. Max number is combinations w/o rep of animals_number
     path, hate_pairs = river_crossing(animals_number, boat_seats_number, hate_number)
-    print(path)
+    if path is None:
+        print('No solution found.')
+    else:
+        print(path)
     print(f'>>> {hate_pairs = }')
